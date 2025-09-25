@@ -158,4 +158,4 @@ class DelayModel:
         predictions = self._model.predict(features)
         if hasattr(predictions, 'tolist'):
             return predictions.tolist()
-        return predictions.tolist()
+        return predictions
