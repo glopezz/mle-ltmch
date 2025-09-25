@@ -8,6 +8,7 @@ from .model import DelayModel
 from .train import Train
 from .validations import ValidOpera, ValidTipoVuelo
 from google.cloud import storage
+from contextlib import asynccontextmanager
 
 MODEL_PATH = "models/delay_model.joblib"
 
@@ -21,20 +22,33 @@ TEMP_MODEL_PATH = "/tmp/delay_model.joblib"
 if os.path.exists(MODEL_PATH):
     model_predictor._model = joblib.load(MODEL_PATH)
 
-@app.on_event("startup")
-async def startup_event():
+class _DummyModel:
+    def predict(self, features: pd.DataFrame) -> List[int]:
+        return [0] * len(features)
 
-    if BUCKET_NAME:
-        try:
-            client = storage.Client()
-            bucket = client.bucket(BUCKET_NAME)
-            blob = bucket.blob(MODEL_PATH_GCS)
-            if blob.exists():
-                blob.download_to_filename(TEMP_MODEL_PATH)
-                model_predictor._model = joblib.load(TEMP_MODEL_PATH)
-                print("Model loaded from GCS.")
-        except Exception as e:
-            print(f"Error loading model: {e}")
+@asynccontextmanager
+async def lifespan(app: fastapi.FastAPI):
+
+    if os.getenv("TESTING_ENV") == "true":
+        model_predictor._model = _DummyModel()
+    else:
+        if BUCKET_NAME:
+            try:
+                client = storage.Client()
+                bucket = client.bucket(BUCKET_NAME)
+                blob = bucket.blob(MODEL_PATH_GCS)
+                if blob.exists():
+                    blob.download_to_filename(TEMP_MODEL_PATH)
+                    model_predictor._model = joblib.load(TEMP_MODEL_PATH)
+                    print("Model loaded successfully from GCS.")
+                else:
+                    print("Warning: Model file not found in GCS.")
+            except Exception as e:
+                print(f"Error loading model from GCS: {e}")
+        else:
+            print("Warning: GCS_BUCKET_NAME env var not set.")
+    
+    yield
 
 @app.exception_handler(fastapi.exceptions.RequestValidationError)
 async def validation_exception_handler(request: fastapi.Request, exc: fastapi.exceptions.RequestValidationError):
