@@ -28,7 +28,7 @@ jobs:
       - name: Install dependencies and train model
         run: |
           pip install -r requirements.txt
-          python challenge/train.py --bucket-name ${{ secrets.GCS_BUCKET }}
+          python -m challenge.train --bucket-name ${{ secrets.GCS_BUCKET }}
 
       - name: Build and Push Docker image
         run: |-
