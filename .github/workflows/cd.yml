@@ -1,0 +1,45 @@
+name: 'Continuous Delivery'
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-train-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: '${{ secrets.GCP_SA }}'
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies and train model
+        run: |
+          pip install -r requirements.txt
+          python challenge/train.py --bucket-name ${{ secrets.GCS_BUCKET }}
+
+      - name: Build and Push Docker image
+        run: |-
+          gcloud auth configure-docker
+          gcloud builds submit --tag gcr.io/${{ secrets.GCP_PROJECT_ID }}/flight-delay-api
+
+      - name: Deploy to Cloud Run
+        run: |-
+          gcloud run deploy flight-delay-api \
+            --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/flight-delay-api \
+            --platform managed \
+            --region us-central1 \
+            --allow-unauthenticated \
+            --set-env-vars GCS_BUCKET_NAME=${{ secrets.GCS_BUCKET }}

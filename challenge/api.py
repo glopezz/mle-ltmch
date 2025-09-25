@@ -7,14 +7,34 @@ import pandas as pd
 from .model import DelayModel
 from .train import Train
 from .validations import ValidOpera, ValidTipoVuelo
+from google.cloud import storage
 
 MODEL_PATH = "models/delay_model.joblib"
 
 app = fastapi.FastAPI()
 model_predictor = DelayModel()
 
+BUCKET_NAME = os.getenv("GCS_BUCKET")
+MODEL_PATH_GCS = "model/delay_model.joblib"
+TEMP_MODEL_PATH = "/tmp/delay_model.joblib"
+
 if os.path.exists(MODEL_PATH):
     model_predictor._model = joblib.load(MODEL_PATH)
+
+@app.on_event("startup")
+async def startup_event():
+
+    if BUCKET_NAME:
+        try:
+            client = storage.Client()
+            bucket = client.bucket(BUCKET_NAME)
+            blob = bucket.blob(MODEL_PATH_GCS)
+            if blob.exists():
+                blob.download_to_filename(TEMP_MODEL_PATH)
+                model_predictor._model = joblib.load(TEMP_MODEL_PATH)
+                print("Model loaded from GCS.")
+        except Exception as e:
+            print(f"Error loading model: {e}")
 
 @app.exception_handler(fastapi.exceptions.RequestValidationError)
 async def validation_exception_handler(request: fastapi.Request, exc: fastapi.exceptions.RequestValidationError):
@@ -38,9 +58,15 @@ async def get_health() -> dict:
 
 @app.post("/train")
 async def train_endpoint():
+    if not BUCKET_NAME:
+        raise fastapi.HTTPException(status_code=500, detail="GCS_BUCKET_NAME env var not set.")
     try:
-        Train.train_and_save("data/data.csv")
-        model_predictor._model = joblib.load(MODEL_PATH)
+        Train.train_and_save(BUCKET_NAME)
+        client = storage.Client()
+        bucket = client.bucket(BUCKET_NAME)
+        blob = bucket.blob(f"model/delay_model.joblib")
+        blob.download_to_filename("/tmp/delay_model.joblib")
+        model_predictor._model = joblib.load("/tmp/delay_model.joblib")
         return {"message": "Training completed and model reloaded."}
     except Exception as e:
         return {"error": f"An error occurred during training: {e}"}
