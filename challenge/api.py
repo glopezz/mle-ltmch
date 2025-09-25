@@ -4,9 +4,9 @@ import joblib
 from pydantic import BaseModel, conint
 from typing import List
 import pandas as pd
-from .model import DelayModel
-from .train import Train
-from .validations import ValidOpera, ValidTipoVuelo
+from challenge.model import DelayModel
+from challenge.train import Train
+from challenge.validations import ValidOpera, ValidTipoVuelo
 from google.cloud import storage
 from contextlib import asynccontextmanager
 

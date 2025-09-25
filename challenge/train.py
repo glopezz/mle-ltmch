@@ -1,5 +1,5 @@
 import pandas as pd
-from .model import DelayModel
+from challenge.model import DelayModel
 import joblib
 import os
 import argparse
