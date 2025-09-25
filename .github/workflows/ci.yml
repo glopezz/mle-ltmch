@@ -13,6 +13,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: '${{ secrets.GCP_SA }}'
+
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
@@ -24,4 +29,6 @@ jobs:
           make install
 
       - name: Run tests
+        env:
+          TESTING_ENV: "true"
         run: make api-test

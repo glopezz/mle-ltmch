@@ -156,4 +156,6 @@ class DelayModel:
             raise ValueError("The model has not yet been trained..")
         
         predictions = self._model.predict(features)
-        return predictions.tolist()
+        if hasattr(predictions, 'tolist'):
+            return predictions.tolist()
+        return predictions
