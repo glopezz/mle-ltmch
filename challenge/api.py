@@ -26,29 +26,24 @@ class _DummyModel:
     def predict(self, features: pd.DataFrame) -> List[int]:
         return [0] * len(features)
 
-@asynccontextmanager
-async def lifespan(app: fastapi.FastAPI):
-
-    if os.getenv("TESTING_ENV") == "true":
-        model_predictor._model = _DummyModel()
+if os.getenv("TESTING_ENV") == "true":
+    model_predictor._model = _DummyModel()
+else:
+    if BUCKET_NAME:
+        try:
+            client = storage.Client()
+            bucket = client.bucket(BUCKET_NAME)
+            blob = bucket.blob(MODEL_PATH_GCS)
+            if blob.exists():
+                blob.download_to_filename(TEMP_MODEL_PATH)
+                model_predictor._model = joblib.load(TEMP_MODEL_PATH)
+                print("Model loaded successfully from GCS.")
+            else:
+                print("Warning: Model file not found in GCS.")
+        except Exception as e:
+            print(f"Error loading model from GCS: {e}")
     else:
-        if BUCKET_NAME:
-            try:
-                client = storage.Client()
-                bucket = client.bucket(BUCKET_NAME)
-                blob = bucket.blob(MODEL_PATH_GCS)
-                if blob.exists():
-                    blob.download_to_filename(TEMP_MODEL_PATH)
-                    model_predictor._model = joblib.load(TEMP_MODEL_PATH)
-                    print("Model loaded successfully from GCS.")
-                else:
-                    print("Warning: Model file not found in GCS.")
-            except Exception as e:
-                print(f"Error loading model from GCS: {e}")
-        else:
-            print("Warning: GCS_BUCKET_NAME env var not set.")
-    
-    yield
+        print("Warning: GCS_BUCKET_NAME env var not set.")
 
 @app.exception_handler(fastapi.exceptions.RequestValidationError)
 async def validation_exception_handler(request: fastapi.Request, exc: fastapi.exceptions.RequestValidationError):
